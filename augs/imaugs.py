@@ -173,7 +173,6 @@ class RandomRotation(Augs):
     pass
 
 
-
 class RandomZoom(Augs):
     pass
 
