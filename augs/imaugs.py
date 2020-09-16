@@ -6,6 +6,18 @@ import tensorflow_addons as tfa
 class Augs(object):
     def __init__(self, only_image):
         self.only_image = only_image
+        self.p = 0.5
+        self.perform = True
+
+    def random_pick(self):
+        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
+            self.perform = False
+        else:
+            self.perform = True
+
+    def build(self):
+        self.random_pick()
+
 
 class OneOf(object):
     def __init__(self, augs):
@@ -22,6 +34,7 @@ class Compose(object):
     def __init__(self, augs):
         self.augs = augs
 
+    @tf.function
     def __call__(self, image, mask=None):
 
         for a in self.augs:
@@ -30,12 +43,14 @@ class Compose(object):
             if not isinstance(a, Augs):
                 raise TypeError('Augmentations must be subclasses of Augs')
             
-            if a.only_image:
-                image = a(image)
-            else:
-                image, mask = a(image, mask)
+            a.build()
 
-        if mask is None:
+            image = a(image)
+
+            if (not a.only_image and mask):
+                mask = a(mask)
+
+        if not mask:
             return image
 
         return image, mask
@@ -53,9 +68,9 @@ class Equalize(Augs):
         self.seed = seed
 
     def __call__(self, image):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image
-        return tfa.image.equalize(image)
+        if self.perform:
+            image = tfa.image.equalize(image)
+        return image
 
 
 class RandomBrightness(Augs):
@@ -67,10 +82,10 @@ class RandomBrightness(Augs):
         self.p = p
         self.seed = seed
 
-    def __call__(self, image):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image
-        return tf.image.random_brightness(image, self.max_delta, self.seed)
+    def call_image(self, image):
+        if self.perform:
+            image = tf.image.random_brightness(image, self.max_delta, self.seed)
+        return image
 
 
 class RandomHue(Augs):
@@ -82,10 +97,11 @@ class RandomHue(Augs):
         self.p = p
         self.seed = seed
 
-    def __call__(self, image):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image
-        return tf.image.random_hue(image, self.max_delta, self.seed)
+    def call_image(self, image):
+        if self.perform:
+            image = tf.image.random_hue(image, self.max_delta, self.seed)
+
+        return image
 
 
 
@@ -99,10 +115,12 @@ class RandomSaturation(Augs):
         self.p = p
         self.seed = seed
 
-    def __call__(self, image):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image
-        return tf.image.random_saturation(image, self.lower, self.upper, self.seed)
+    def call_image(self, image):
+        
+        if self.perform:
+            image = tf.image.random_saturation(image, self.lower, self.upper, self.seed)
+
+        return image
 
 
 
@@ -117,10 +135,11 @@ class RandomContrast(Augs):
         self.p = p
         self.seed = seed
 
-    def __call__(self, image):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image
-        return tf.image.random_contrast(image, self.lower, self.upper, self.seed)
+    def call_image(self, image):
+        if self.perform:
+            image = tf.image.random_contrast(image, self.lower, self.upper, self.seed)
+
+        return image
 
 
 class RandomJpegQuality(Augs):
@@ -133,14 +152,13 @@ class RandomJpegQuality(Augs):
         self.p = p
         self.seed = seed
 
-    def __call__(self, image):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image
-        
-        quality = tf.random.uniform([], minval=self.min_quality,
-                        maxval=self.max_quality, dtype=tf.int32, seed=self.seed)
+    def call_image(self, image):
+        if self.perform:
+            quality = tf.random.uniform([], minval=self.min_quality,
+                            maxval=self.max_quality, dtype=tf.int32, seed=self.seed)
+            image = tf.image.adjust_jpeg_quality(image, jpeg_quality=quality)
 
-        return tf.image.adjust_jpeg_quality(image, jpeg_quality=quality)
+        return image
 
 
 class GaussianNoise(Augs):
@@ -154,19 +172,13 @@ class GaussianNoise(Augs):
         self.seed = seed
 
     def __call__(self, image):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image
-
-        gnoise = tf.random.normal(shape=tf.shape(image), mean=self.mean,
+        if self.perform:
+            gnoise = tf.random.normal(shape=tf.shape(image), mean=self.mean,
                                  stddev=self.stddev, dtype=tf.float32)
-
-        return tf.add(image, gnoise)
+            image = tf.cast(tf.add(tf.cast(image, tf.float32), gnoise), tf.uint8)
+        return image
 
         
-
-
-
-
 
 
 class RandomRotation(Augs):
@@ -181,7 +193,7 @@ class RandomShift(Augs):
 
 
 
-
+# TODO fix central_crop or rewrite
 class RandomCentralCrop(Augs):
 
     def __init__(self, min_fraction, max_fraction, p=0.5, seed=None):
@@ -192,24 +204,32 @@ class RandomCentralCrop(Augs):
         self.p = p
         self.seed = seed
 
-    def __call__(self, image, mask):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image, mask
+    def build(self):
 
-        fraction = tf.random.uniform([], minval=self.min_fraction,
+        self.fraction = tf.random.uniform([], minval=self.min_fraction,
                         maxval=self.max_fraction, dtype=tf.float32, seed=self.seed)
 
-        image = tf.image.central_crop(image, fraction)
+        self.random_pick()
 
+    def __call__(self, image):
+        if self.perform:
 
-        if not mask:
-            return image, mask
+            shape = tf.cast(tf.shape(image), tf.float32)
 
-        mask = tf.image.central_crop(image, fraction)
+            width_size = shape[0] * self.fraction
+            height_size = shape[1] * self.fraction
 
-        return image, mask
-     
+            
 
+            width_r = tf.cast((shape[0] - width_size) / 2.0, tf.int32)
+            height_r = tf.cast((shape[1] - height_size) / 2.0, tf.int32)
+            
+
+            width_size = tf.cast(width_size, tf.int32)
+            height_size = tf.cast(height_size, tf.int32)
+            image = tf.slice(image, [width_r, height_r, 0], [width_size, height_size, -1])
+
+        return image
 
 
 
@@ -232,37 +252,32 @@ class RandomPad(Augs):
         self.hfr = hfraction_range
         self.p = p
         self.seed = seed
+        self.perform = True
 
-    def __call__(self, image, mask):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image, mask
-
-        wpad = tf.random.uniform([], minval=self.wfr[0],
+    def build(self):
+        self.wpad = tf.random.uniform([], minval=self.wfr[0],
                                 maxval=self.wfr[1], dtype=tf.float32, seed=self.seed)
 
-        hpad = tf.random.uniform([], minval=self.hfr[0],
+        self.hpad = tf.random.uniform([], minval=self.hfr[0],
                                 maxval=self.hfr[1], dtype=tf.float32, seed=self.seed)
-        
-        shape = tf.cast(tf.shape(image), tf.float32)
-        hpad = shape[0] * hpad / 2
-        wpad = shape[1] * wpad / 2
-        end_h, end_w = shape[0] + hpad * 2.0, shape[1] + wpad * 2.0
 
+        self.random_pick()
+        
+
+    def __call__(self, image):
+
+        shape = tf.cast(tf.shape(image), tf.float32)
+        hpad = shape[0] * self.hpad / 2
+        wpad = shape[1] * self.wpad / 2
+        end_h, end_w = shape[0] + hpad * 2.0, shape[1] + wpad * 2.0
+        
         hpad = tf.cast(hpad, tf.int32)
         wpad = tf.cast(wpad, tf.int32)
         end_w = tf.cast(end_w, tf.int32)
         end_h = tf.cast(end_h, tf.int32)
 
-        image = tf.image.pad_to_bounding_box(
-            image, hpad, wpad, end_h, end_w
-        )
-        
-        if not mask:
-            return image, mask
-
-        mask = tf.image.pad_to_bounding_box(
-            mask, hpad, wpad, end_h, end_w
-        )
-                    
-        return image, mask
-
+        if self.perform:
+            image = tf.image.pad_to_bounding_box(
+                image, hpad, wpad, end_h, end_w
+            )
+        return image
