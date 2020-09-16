@@ -247,11 +247,12 @@ class RandomPad(Augs):
         shape = tf.cast(tf.shape(image), tf.float32)
         hpad = shape[0] * hpad / 2
         wpad = shape[1] * wpad / 2
-
-        end_h, end_w = shape[0] + hpad * 2, shape[1] + wpad * 2
+        end_h, end_w = shape[0] + hpad * 2.0, shape[1] + wpad * 2.0
 
         hpad = tf.cast(hpad, tf.int32)
         wpad = tf.cast(wpad, tf.int32)
+        end_w = tf.cast(end_w, tf.int32)
+        end_h = tf.cast(end_h, tf.int32)
 
         image = tf.image.pad_to_bounding_box(
             image, hpad, wpad, end_h, end_w
