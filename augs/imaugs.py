@@ -197,8 +197,6 @@ class GaussianNoise(Augs):
         
 
 
-class RandomRotation(Augs):
-    pass
 
 
 class RandomZoom(Augs):
@@ -206,6 +204,34 @@ class RandomZoom(Augs):
 
 class RandomShift(Augs):
     pass
+
+
+
+
+class RandomRotation(Augs):
+    
+
+    def __init__(self, angle_range=(-10, 10), interpolation='BILINEAR', p=0.5, seed=None):
+        self.__doc__ = tfa.image.rotate.__doc__
+        self.angle_range = angle_range
+        self.interpolation = interpolation
+        self.p = p
+        self.pi = tf.constant(np.pi)
+        self.seed = seed
+ 
+    def build(self):
+        angle = tf.random.uniform([], minval=self.angle_range[0],
+                                     maxval=self.angle_range[1], dtype=tf.int32)
+
+        self.rad = tf.cast(angle, tf.float32) * self.pi / 180.0
+
+        self.random_pick()
+
+    def __call__(self, image):
+        if self.perform:
+            image = tfa.image.rotate(image, self.rad, self.interpolation)
+
+        return image
 
 
 

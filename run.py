@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import augs.imaugs as T
 
 
-SEED = 213
+SEED = 123
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 AUTOTUNE = tf.data.experimental.AUTOTUNE
@@ -14,6 +14,7 @@ segm_augs = T.SegmCompose([
 ])
 
 augs = T.Compose([
+    T.RandomRotation(angle_range=(-30, 30), p=1.0),
     T.OneOf([
 
         T.RandomHue(0.3, p=1.0),
@@ -25,7 +26,7 @@ augs = T.Compose([
         T.RandomPad((0.2, 0.4), (0.3, 0.4), p=1.0)
     ]),
     T.RandomCentralCrop(0.4, 0.5),
-    T.GaussianNoise(0.0, 1.2),
+    # T.GaussianNoise(0.0, 1.2),
     T.RandomPad((0.2, 0.4), (0.3, 0.4), p=1.0),
     T.RandomBrightness(0.5, p=1.0)
 ])
