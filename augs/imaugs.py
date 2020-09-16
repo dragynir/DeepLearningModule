@@ -82,7 +82,7 @@ class RandomBrightness(Augs):
         self.p = p
         self.seed = seed
 
-    def call_image(self, image):
+    def __call__(self, image):
         if self.perform:
             image = tf.image.random_brightness(image, self.max_delta, self.seed)
         return image
@@ -97,7 +97,7 @@ class RandomHue(Augs):
         self.p = p
         self.seed = seed
 
-    def call_image(self, image):
+    def __call__(self, image):
         if self.perform:
             image = tf.image.random_hue(image, self.max_delta, self.seed)
 
@@ -115,7 +115,7 @@ class RandomSaturation(Augs):
         self.p = p
         self.seed = seed
 
-    def call_image(self, image):
+    def __call__(self, image):
         
         if self.perform:
             image = tf.image.random_saturation(image, self.lower, self.upper, self.seed)
@@ -135,7 +135,7 @@ class RandomContrast(Augs):
         self.p = p
         self.seed = seed
 
-    def call_image(self, image):
+    def __call__(self, image):
         if self.perform:
             image = tf.image.random_contrast(image, self.lower, self.upper, self.seed)
 
@@ -152,7 +152,7 @@ class RandomJpegQuality(Augs):
         self.p = p
         self.seed = seed
 
-    def call_image(self, image):
+    def __call__(self, image):
         if self.perform:
             quality = tf.random.uniform([], minval=self.min_quality,
                             maxval=self.max_quality, dtype=tf.int32, seed=self.seed)
