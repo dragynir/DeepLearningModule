@@ -4,17 +4,16 @@ import tensorflow_addons as tfa
 
 
 class Augs(object):
-    def __init__(self):
-        self.only_image = True
+    def __init__(self, only_image):
+        self.only_image = only_image
 
 class OneOf(object):
     def __init__(self, augs):
         self.augs = augs
 
-    def  __call__():
+    def  __call__(self):
         i = tf.random.uniform([], 0, len(self.augs), dtype=tf.int32)
         return self.augs[i]
-
 
 
 
@@ -23,19 +22,21 @@ class Compose(object):
     def __init__(self, augs):
         self.augs = augs
 
-    @tf.function
     def __call__(self, image, mask=None):
 
         for a in self.augs:
             if isinstance(a, OneOf):
                 a = a()
-            if not issubclass(a, Augs):
+            if not isinstance(a, Augs):
                 raise TypeError('Augmentations must be subclasses of Augs')
             
             if a.only_image:
                 image = a(image)
             else:
                 image, mask = a(image, mask)
+
+        if mask is None:
+            return image
 
         return image, mask
 
@@ -60,6 +61,7 @@ class Equalize(Augs):
 class RandomBrightness(Augs):
 
     def __init__(self, max_delta, p=0.5, seed=None):
+        super().__init__(only_image=True)
         self.__doc__ = tf.image.random_brightness.__doc__
         self.max_delta = max_delta
         self.p = p
@@ -74,6 +76,7 @@ class RandomBrightness(Augs):
 class RandomHue(Augs):
 
     def __init__(self, max_delta, p=0.5, seed=None):
+        super().__init__(only_image=True)
         self.__doc__ = tf.image.random_hue.__doc__
         self.max_delta = max_delta
         self.p = p
@@ -89,6 +92,7 @@ class RandomHue(Augs):
 class RandomSaturation(Augs):
 
     def __init__(self, lower, upper, p=0.5, seed=None):
+        super().__init__(only_image=True)
         self.__doc__ = tf.image.random_saturation.__doc__
         self.lower = lower
         self.upper = upper
@@ -106,6 +110,7 @@ class RandomSaturation(Augs):
 class RandomContrast(Augs):
 
     def __init__(self, lower, upper, p=0.5, seed=None):
+        super().__init__(only_image=True)
         self.__doc__ = tf.image.random_contrast.__doc__
         self.lower = lower
         self.upper = upper
@@ -121,6 +126,7 @@ class RandomContrast(Augs):
 class RandomJpegQuality(Augs):
 
     def __init__(self, min_quality, max_quality, p=0.5, seed=None):
+        super().__init__(only_image=True)
         self.__doc__ = tf.image.random_contrast.__doc__
         self.min_quality = min_quality
         self.max_quality = max_quality
@@ -140,6 +146,7 @@ class RandomJpegQuality(Augs):
 class GaussianNoise(Augs):
 
     def __init__(self, mean, stddev, p=0.5, seed=None):
+        super().__init__(only_image=True)
         self.__doc__ = tf.random.normal.__doc__
         self.mean = mean
         self.stddev = stddev
@@ -162,12 +169,25 @@ class GaussianNoise(Augs):
 
 
 
+class RandomRotation(Augs):
+    pass
+
+
+
+class RandomZoom(Augs):
+    pass
+
+class RandomShift(Augs):
+    pass
+
+
+
 
 class RandomCentralCrop(Augs):
 
     def __init__(self, min_fraction, max_fraction, p=0.5, seed=None):
+        super().__init__(only_image=False)
         self.__doc__ = tf.image.central_crop.__doc__
-        self.only_image = False
         self.min_fraction = min_fraction
         self.max_fraction = max_fraction
         self.p = p
@@ -178,7 +198,7 @@ class RandomCentralCrop(Augs):
             return image, mask
 
         fraction = tf.random.uniform([], minval=self.min_fraction,
-                        maxval=self.max_fraction, dtype=tf.int32, seed=self.seed)
+                        maxval=self.max_fraction, dtype=tf.float32, seed=self.seed)
 
         image = tf.image.central_crop(image, fraction)
 
@@ -190,117 +210,6 @@ class RandomCentralCrop(Augs):
 
         return image, mask
      
-
-
-class RandomRotation(Augs):
-
-    # if tf.random.normal([1], 0, 1) > 0:
-    #     rotate_factor = tf.random.normal([1], 32, 8)
-    #     neg = tf.constant(np.dtype('float32').type(1))
-
-    #     if tf.random.normal([1], 0, 1) > 0:
-    #         neg = tf.constant(np.dtype('float32').type(-1))
-
-    #     rad = (neg * np.pi) / rotate_factor
-        
-    #     input_image = tfa.image.rotate(input_image, rad)
-    #     input_mask = tfa.image.rotate(input_mask, rad)
-    
-
-    def __init__(self, rg, fill_mode='nearest', cval=0.0, p=0.5, seed=None):
-        self.__doc__ = tf.keras.preprocessing.image.random_rotation.__doc__
-        self.only_image = False
-        
-        self.rg = rg
-        self.fill_mode = fill_mode
-        self.cval = cval
-        self.p = p
-        self.seed = seed
-
-    def __call__(self, image, mask):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image, mask
-
-        image = tf.keras.preprocessing.image.random_rotation(
-                        image, rg=self.rg, row_axis=0, col_axis=1,
-                        channel_axis=2, fill_mode=self.fill_mode, cval=self.cval
-                        )
-
-        if not mask:
-            return image, mask
-
-        mask = tf.keras.preprocessing.image.random_rotation(
-                        mask, rg=self.rg, row_axis=0, col_axis=1,
-                        channel_axis=2, fill_mode=self.fill_mode, cval=self.cval
-                        )
-        return image, mask
-
-
-
-class RandomZoom(Augs):
-
-    def __init__(self, zoom_range, fill_mode='nearest', cval=0.0, p=0.5, seed=None):
-        self.__doc__ = tf.keras.preprocessing.image.random_zoom.__doc__
-        self.only_image = False
-        
-        self.zoom_range = zoom_range
-        self.fill_mode = fill_mode
-        self.cval = cval
-        self.p = p
-        self.seed = seed
-
-    def __call__(self, image, mask):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image, mask
-
-        image = tf.keras.preprocessing.image.random_zoom(
-                        image, zoom_range=self.zoom_range, row_axis=0, col_axis=1,
-                        channel_axis=2, fill_mode=self.fill_mode, cval=self.cval
-                        )
-
-        if not mask:
-            return image, mask
-
-        mask = tf.keras.preprocessing.image.random_zoom(
-                        mask, zoom_range=self.zoom_range, row_axis=0, col_axis=1,
-                        channel_axis=2, fill_mode=self.fill_mode, cval=self.cval
-                        )
-        return image, mask
-
-
-class RandomShift(Augs):
-
-    def __init__(self, wrg, hrg, fill_mode='nearest', cval=0.0, p=0.5, seed=None):
-        self.__doc__ = tf.keras.preprocessing.image.random_zoom.__doc__
-        self.only_image = False
-        
-        self.hrg = hrg
-        self.wrg = wrg
-        self.fill_mode = fill_mode
-        self.cval = cval
-        self.p = p
-        self.seed = seed
-
-    def __call__(self, image, mask):
-        if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
-            return image, mask
-
-        image = tf.keras.preprocessing.image.random_shift(
-            image, wrg=self.wrg, hrg=self.hrg, row_axis=0, col_axis=1,
-            channel_axis=2, fill_mode=self.fill_mode, cval=0.0, interpolation_order=1
-        )
-
-        if not mask:
-            return image, mask
-
-        mask = tf.keras.preprocessing.image.random_shift(
-            mask, wrg=self.wrg, hrg=self.hrg, row_axis=0, col_axis=1,
-            channel_axis=2, fill_mode=self.fill_mode, cval=0.0, interpolation_order=1
-        )
-                    
-        return image, mask
-
-
 
 
 
@@ -319,9 +228,9 @@ class RandomPad(Augs):
     '''
 
     def __init__(self, wfraction_range, hfraction_range, p=0.5, seed=None):
+        super().__init__(only_image=False)
         self.wfr = wfraction_range
         self.hfr = hfraction_range
-        self.only_image = False
         self.p = p
         self.seed = seed
 
@@ -336,20 +245,23 @@ class RandomPad(Augs):
                                 maxval=self.hfr[1], dtype=tf.float32, seed=self.seed)
         
         shape = tf.cast(tf.shape(image), tf.float32)
+        hpad = shape[0] * hpad / 2
+        wpad = shape[1] * wpad / 2
 
-        hpad = tf.cast(shape[0] * hpad / 2, tf.int32)
-        wpad = tf.cast(shape[1] * wpad / 2, tf.int32)
+        end_h, end_w = shape[0] + hpad * 2, shape[1] + wpad * 2
 
+        hpad = tf.cast(hpad, tf.int32)
+        wpad = tf.cast(wpad, tf.int32)
 
         image = tf.image.pad_to_bounding_box(
-            image, hpad, wpad, shape[0] + hpad * 2, shape[1] + wpad * 2
+            image, hpad, wpad, end_h, end_w
         )
         
         if not mask:
             return image, mask
 
         mask = tf.image.pad_to_bounding_box(
-            mask, hpad, wpad, shape[0] + hpad * 2, shape[1] + wpad * 2
+            mask, hpad, wpad, end_h, end_w
         )
                     
         return image, mask
