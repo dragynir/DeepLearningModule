@@ -1,6 +1,6 @@
 import tensorflow as tf
 import tensorflow_addons as tfa
-
+import numpy as np
 
 
 class Augs(object):
@@ -8,6 +8,7 @@ class Augs(object):
         self.only_image = only_image
         self.p = 0.5
         self.perform = True
+        self.seed = None
 
     def random_pick(self):
         if tf.random.uniform([], dtype=tf.float32, seed=self.seed) > self.p:
@@ -24,18 +25,17 @@ class OneOf(object):
         self.augs = augs
 
     def  __call__(self):
-        i = tf.random.uniform([], 0, len(self.augs), dtype=tf.int32)
-        return self.augs[i]
+        i = np.random.randint(0, len(self.augs))
+        return self.augs[i] 
 
 
-
-class Compose(object):
+class SegmCompose(object):
 
     def __init__(self, augs):
         self.augs = augs
 
     @tf.function
-    def __call__(self, image, mask=None):
+    def __call__(self, image, mask):
 
         for a in self.augs:
             if isinstance(a, OneOf):
@@ -44,16 +44,32 @@ class Compose(object):
                 raise TypeError('Augmentations must be subclasses of Augs')
             
             a.build()
-
             image = a(image)
 
-            if (not a.only_image and mask):
+            if not a.only_image:
                 mask = a(mask)
 
-        if not mask:
-            return image
-
         return image, mask
+
+
+class Compose(object):
+    def __init__(self, augs):
+        self.augs = augs
+
+    @tf.function
+    def __call__(self, image):
+
+        for a in self.augs:
+            if isinstance(a, OneOf):
+                a = a()
+            if not isinstance(a, Augs):
+                raise TypeError('Augmentations must be subclasses of Augs')
+            
+            a.build()
+            image = a(image)
+
+        return image
+
 
 
 
