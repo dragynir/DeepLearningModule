@@ -4,6 +4,7 @@ import numpy as np
 
 
 # TODO move p and seed to Augs
+# TODO add seed to some classes
 
 class Augs(object):
     def __init__(self, only_image):
@@ -208,12 +209,16 @@ class RandomShift(Augs):
     pass
 
 
+class RandomSharpness(Augs):
+    pass
+
 
 
 
 class RandomZoom(Augs):
     
     def __init__(self, target_size, zoom_max=0.8, count=10, p=0.5, seed=None):
+        super().__init__(only_image=False)
         self.target_size = target_size
         self.p = p
         self.seed = seed

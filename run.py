@@ -17,6 +17,8 @@ segm_augs = T.SegmCompose([
 
 
 augs = T.Compose([
+    # T.RandomJpegQuality(30, 50, p=1.0),
+    T.RandomSharpness(factor_range=(0.3, 0.7), p=1.0)
     #T.RandomZoom(target_size=(200, 200), zoom_max=0.3),
     # T.FlipLeftRight(),
     # T.RandomRotate90(p=1.0),
@@ -33,7 +35,7 @@ augs = T.Compose([
     #     T.RandomPad((0.2, 0.4), (0.3, 0.4), p=1.0)
     # ]),
     # T.RandomCentralCrop(0.4, 0.5),
-    T.GaussianNoise(0.0, 10.0, p=1.0),
+    #T.GaussianNoise(0.0, 10.0, p=1.0),
     # T.RandomPad((0.2, 0.4), (0.3, 0.4), p=1.0),
     # T.RandomBrightness(0.5, p=1.0)
 ])
