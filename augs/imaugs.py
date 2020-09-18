@@ -3,6 +3,8 @@ import tensorflow_addons as tfa
 import numpy as np
 
 
+# TODO move p and seed to Augs
+
 class Augs(object):
     def __init__(self, only_image):
         self.only_image = only_image
@@ -16,7 +18,7 @@ class Augs(object):
         else:
             self.perform = True
 
-    def build(self):
+    def build(self, shape):
         self.random_pick()
 
 
@@ -35,7 +37,7 @@ class SegmCompose(object):
         self.augs = augs
 
     @tf.function
-    def __call__(self, image, mask):
+    def __call__(self, image: tf.Tensor, mask: tf.Tensor) -> tf.Tensor:
 
         for a in self.augs:
             if isinstance(a, OneOf):
@@ -43,7 +45,7 @@ class SegmCompose(object):
             if not isinstance(a, Augs):
                 raise TypeError('Augmentations must be subclasses of Augs')
             
-            a.build()
+            a.build(tf.shape(image))
             image = a(image)
 
             if not a.only_image:
@@ -57,7 +59,7 @@ class Compose(object):
         self.augs = augs
 
     @tf.function
-    def __call__(self, image):
+    def __call__(self, image: tf.Tensor) -> tf.Tensor:
 
         for a in self.augs:
             if isinstance(a, OneOf):
@@ -65,7 +67,7 @@ class Compose(object):
             if not isinstance(a, Augs):
                 raise TypeError('Augmentations must be subclasses of Augs')
             
-            a.build()
+            a.build(tf.shape(image))
             image = a(image)
 
         return image
@@ -79,6 +81,7 @@ class Compose(object):
 
 class Equalize(Augs):
     def __init__(self, max_delta, p=0.5, seed=None):
+        super().__init__(only_image=True)
         self.__doc__ = tfa.image.equalize.__doc__
         self.p = p
         self.seed = seed
@@ -132,7 +135,6 @@ class RandomSaturation(Augs):
         self.seed = seed
 
     def __call__(self, image):
-        
         if self.perform:
             image = tf.image.random_saturation(image, self.lower, self.upper, self.seed)
 
@@ -177,6 +179,7 @@ class RandomJpegQuality(Augs):
         return image
 
 
+
 class GaussianNoise(Augs):
 
     def __init__(self, mean, stddev, p=0.5, seed=None):
@@ -191,7 +194,9 @@ class GaussianNoise(Augs):
         if self.perform:
             gnoise = tf.random.normal(shape=tf.shape(image), mean=self.mean,
                                  stddev=self.stddev, dtype=tf.float32)
-            image = tf.cast(tf.add(tf.cast(image, tf.float32), gnoise), tf.uint8)
+            image = tf.clip_by_value(tf.add(tf.cast(image, tf.float32), gnoise),
+                            clip_value_min=0.0, clip_value_max=255.0)
+            image = tf.cast(image, tf.uint8)
         return image
 
         
@@ -199,11 +204,139 @@ class GaussianNoise(Augs):
 
 
 
-class RandomZoom(Augs):
-    pass
-
 class RandomShift(Augs):
     pass
+
+
+
+
+
+class RandomZoom(Augs):
+    
+    def __init__(self, target_size, zoom_max=0.8, count=10, p=0.5, seed=None):
+        self.target_size = target_size
+        self.p = p
+        self.seed = seed
+        self.__generate_boxes(zoom_max, count)
+        
+
+    def __generate_boxes(self, zoom_max, count):
+        step = (1.0 - zoom_max) / count
+        scales = list(np.arange(zoom_max, 1.0, step))
+        bx = np.zeros((len(scales), 4))
+        for i, scale in enumerate(scales):
+            x1 = y1 = 0.5 - (0.5 * scale)
+            x2 = y2 = 0.5 + (0.5 * scale)
+            bx[i] = [x1, y1, x2, y2]
+        
+        self.boxes_count = len(bx)
+        self.boxes = tf.constant(bx, dtype=tf.float32)
+
+    def build(self, shape):
+
+        self.pick_i = tf.random.uniform([], minval=0,
+                maxval=self.boxes_count, dtype=tf.int32)
+        
+        self.random_pick()
+
+    def __call__(self, image):
+
+        if self.perform:
+            box = tf.reshape(self.boxes[self.pick_i], (1, 4))
+
+            image = tf.image.crop_and_resize([image], boxes=box,
+                box_indices=[0], crop_size=self.target_size)
+            
+            image = tf.cast(image, tf.uint8)
+            image = tf.squeeze(image)
+        return image
+
+
+
+
+
+class RandomRotate90(Augs):
+    def __init__(self, k_range = (0, 4), p=0.5, seed=None):
+        super().__init__(only_image=False)
+        self.k_range = k_range
+        self.p = p
+        self.seed = seed
+
+    def build(self, shape):
+
+        self.k = tf.random.uniform([], minval=self.k_range[0],
+                maxval=self.k_range[1], dtype=tf.int32)
+        
+        self.random_pick()
+
+    def __call__(self, image):
+        if self.perform:
+            image = tf.image.rot90(image, k=self.k)
+        return image
+
+
+class FlipLeftRight(Augs):
+    def __init__(self, p=0.5, seed=None):
+        super().__init__(only_image=False)
+        self.__doc__ = tf.image.flip_left_right.__doc__
+        self.p = p
+        self.seed = seed
+
+    def __call__(self, image):
+        if self.perform:
+            image = tf.image.flip_left_right(image)
+        return image
+        
+
+class FlipUpDown(Augs):
+    def __init__(self, p=0.5, seed=None):
+        super().__init__(only_image=False)
+        self.__doc__ = tf.image.flip_up_down.__doc__
+        self.p = p
+        self.seed = seed
+
+    def __call__(self, image):
+        if self.perform:
+            image = tf.image.flip_up_down(image)
+        return image
+
+
+class RandomCrop(Augs):
+
+    def __init__(self, width, height, p=0.5, seed=None):
+        super().__init__(only_image=False)
+        self.width = width
+        self.height = height
+        self.p = p
+        self.seed = seed
+
+    
+    def build(self, shape):
+
+        max_width_step = shape[0] - self.width
+        max_height_step = shape[1] - self.height
+
+        tf.debugging.Assert(tf.math.less(-1, max_height_step),
+        ["RandomCrop: Crop height is bigger then image height", max_height_step])
+
+        tf.debugging.Assert(tf.math.less(-1, max_width_step),
+        ["RandomCrop: Crop width is bigger then image width", max_width_step]) 
+
+        self.w_step = tf.random.uniform([], minval=0, dtype=tf.int32,
+                        maxval=max_width_step, seed=self.seed)
+
+        self.h_step = tf.random.uniform([], minval=0, dtype=tf.int32,
+                        maxval=max_height_step, seed=self.seed)
+
+        self.random_pick()
+    
+    def __call__(self, image):
+        if self.perform:
+            image = tf.slice(image,[self.w_step, self.h_step, 0],
+                    [self.width, self.height, -1])
+
+        return image
+
 
 
 
@@ -212,6 +345,7 @@ class RandomRotation(Augs):
     
 
     def __init__(self, angle_range=(-10, 10), interpolation='BILINEAR', p=0.5, seed=None):
+        super().__init__(only_image=False)
         self.__doc__ = tfa.image.rotate.__doc__
         self.angle_range = angle_range
         self.interpolation = interpolation
@@ -219,7 +353,7 @@ class RandomRotation(Augs):
         self.pi = tf.constant(np.pi)
         self.seed = seed
  
-    def build(self):
+    def build(self, shape):
         angle = tf.random.uniform([], minval=self.angle_range[0],
                                      maxval=self.angle_range[1], dtype=tf.int32)
 
@@ -235,7 +369,6 @@ class RandomRotation(Augs):
 
 
 
-# TODO fix central_crop or rewrite
 class RandomCentralCrop(Augs):
 
     def __init__(self, min_fraction, max_fraction, p=0.5, seed=None):
@@ -246,7 +379,7 @@ class RandomCentralCrop(Augs):
         self.p = p
         self.seed = seed
 
-    def build(self):
+    def build(self, shape):
 
         self.fraction = tf.random.uniform([], minval=self.min_fraction,
                         maxval=self.max_fraction, dtype=tf.float32, seed=self.seed)
@@ -260,8 +393,6 @@ class RandomCentralCrop(Augs):
 
             width_size = shape[0] * self.fraction
             height_size = shape[1] * self.fraction
-
-            
 
             width_r = tf.cast((shape[0] - width_size) / 2.0, tf.int32)
             height_r = tf.cast((shape[1] - height_size) / 2.0, tf.int32)
@@ -296,7 +427,7 @@ class RandomPad(Augs):
         self.seed = seed
         self.perform = True
 
-    def build(self):
+    def build(self, shape):
         self.wpad = tf.random.uniform([], minval=self.wfr[0],
                                 maxval=self.wfr[1], dtype=tf.float32, seed=self.seed)
 
