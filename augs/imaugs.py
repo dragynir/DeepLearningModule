@@ -213,6 +213,9 @@ class RandomSharpness(Augs):
     pass
 
 
+class ChannelsShift(Augs):
+    pass
+
 
 
 class RandomZoom(Augs):
