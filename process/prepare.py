@@ -1,6 +1,7 @@
 import math
 import numpy as np
 
+
 class DataPreparation(object):
 
     def __init__(self):

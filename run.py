@@ -18,7 +18,6 @@ segm_augs = T.SegmCompose([
 
 augs = T.Compose([
     # T.RandomJpegQuality(30, 50, p=1.0),
-    T.RandomSharpness(factor_range=(0.3, 0.7), p=1.0)
     #T.RandomZoom(target_size=(200, 200), zoom_max=0.3),
     # T.FlipLeftRight(),
     # T.RandomRotate90(p=1.0),
