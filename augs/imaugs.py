@@ -80,6 +80,8 @@ class Compose(object):
 
 
 
+
+# TODO check operation(None type)
 class Equalize(Augs):
     def __init__(self, max_delta, p=0.5, seed=None):
         super().__init__(only_image=True)
@@ -216,6 +218,111 @@ class RandomSharpness(Augs):
 class ChannelsShift(Augs):
     pass
 
+
+
+
+
+
+
+
+# decode image
+class RandomFdaTransfer(Augs):
+
+    '''
+        target_images: array of images paths, else array of Tensors (H, W, C)
+    '''
+
+    def __init__(self, target_images, transfer_size, l_range=(0.01, 0.05), p=0.5, seed=None):
+        super().__init__(only_image=True)
+        self.transfer_size = transfer_size
+        self.target_images = target_images
+        self.targets_count = len(target_images)
+        self.l_range = l_range
+        self.p = p
+        self.seed = seed
+
+    @staticmethod
+    def __transfer_amp(amp_src, amp_trg, L):
+
+        src = tf.signal.fftshift(amp_src, axes=[0, 1])
+        trg = tf.signal.fftshift(amp_trg, axes=[0, 1])
+
+        h, w, _ = tf.cast(tf.shape(src), tf.float32)
+        b = tf.math.floor(tf.math.reduce_min((h, w)) * L)
+
+        # compute image center
+        c_h = tf.math.floor(h/2.0)
+        c_w = tf.math.floor(w/2.0)
+
+        # compute central square to transfer
+        h1 = c_h - b
+        h2 = c_h + b + 1
+        w1 = c_w - b
+        w2 = c_w + b + 1
+
+        start_w = tf.cast(w1, tf.int32)
+        len_w = tf.cast(w2 - w1, tf.int32)
+
+        start_h = tf.cast(h1, tf.int32)
+        len_h = tf.cast(h2 - h1, tf.int32)
+
+
+        w = tf.cast(w, tf.int32)
+        h = tf.cast(h, tf.int32)
+
+
+        trg_slice = tf.slice(trg,
+                [start_h, start_w, 0], [len_h, len_w, -1])
+            
+
+        center_mask = tf.ones_like(trg_slice)
+
+        mask_canvas = tf.image.pad_to_bounding_box(
+            [center_mask],
+            start_h,
+            start_w,
+            h,
+            w
+        )
+
+        bool_mask = tf.squeeze(tf.cast(mask_canvas, tf.bool))
+
+        src_with_trg = tf.where(bool_mask, trg, src)
+
+        return tf.signal.ifftshift(src_with_trg, axes=[0, 1])
+
+    @staticmethod
+    def transfer_domain(src_image, trg_image, L):
+
+        src_fft = tf.signal.fft3d(src_image)
+        trg_fft = tf.signal.fft3d(trg_image)
+
+        tr_amp = RandomFdaTransfer.__transfer_amp(tf.abs(src_fft), tf.abs(trg_fft), L=L)
+        tr_amp = tf.cast(tr_amp, tf.complex64)
+
+        src_fft_mutated = tr_amp * tf.math.exp(tf.cast(tf.math.angle(src_fft),
+                                      tf.complex64) * tf.complex([0.0], [1.0]))
+
+        return tf.math.real(tf.signal.ifft3d(src_fft_mutated))
+
+    def __call__(self, image):
+        if self.perform:
+            image = tf.image.resize(image, self.transfer_size)
+
+            target_ind = tf.random.uniform([], minval=0,
+                    maxval=self.targets_count, dtype=tf.int32)
+
+            # write load and decode image
+            trg_image = self.target_images[target_ind]
+
+            trg_image = tf.image.resize(trg_image, self.transfer_size)
+
+            L = tf.random.uniform([], minval=self.l_range[0],
+                    maxval=self.l_range[1])
+
+            image = RandomFdaTransfer.transfer_domain(image, trg_image, L)
+
+        return image
 
 
 class RandomZoom(Augs):
