@@ -229,7 +229,7 @@ class ChannelsShift(Augs):
 class RandomFdaTransfer(Augs):
 
     '''
-        target_images: array of images paths, else array of Tensors (H, W, C)
+        target_images: array of images (H, W, C)
     '''
 
     def __init__(self, target_images, transfer_size, l_range=(0.01, 0.05), p=0.5, seed=None):
@@ -332,6 +332,8 @@ class RandomFdaTransfer(Augs):
             image = tf.clip_by_value(image, clip_value_min=0.0, clip_value_max=255.0)
 
             image = tf.cast(image, tf.uint8)
+
+            image = tf.image.resize(image, self.transfer_size)
 
         return image
 
