@@ -36,6 +36,73 @@ def dice_coef_loss(y_true, y_pred):
     return 1. - score
 
 
+def multi_class_focal_loss(gamma=2., alpha=.25):
+    """
+    focal loss for multi category of multi label problem
+    Focal loss for multi-class or multi-label problems
+         Alpha controls the weight when the true value y_true is 1/0
+                 The weight of 1 is alpha, and the weight of 0 is 1-alpha.
+         When your model is under-fitting and you have difficulty learning, you can try to apply this function as a loss.
+         When the model is too aggressive (whenever it tends to predict 1), try to reduce the alpha
+         When the model is too inert (whenever it always tends to predict 0, or a fixed constant, it means that no valid features are learned)
+                 Try to increase the alpha and encourage the model to predict 1.
+    """
+    epsilon = 1.e-7
+    gamma = float(gamma)
+    alpha = tf.constant(alpha, dtype=tf.float32)
+
+    def loss_func(y_true, y_pred):
+        y_true = tf.cast(y_true, tf.float32)
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1. - epsilon)
+
+        # alpha where 1, and 1 - alpha where 0
+        alpha_t = y_true * alpha + (tf.ones_like(y_true)-y_true)*(1-alpha)
+
+        # p or 1 - p 
+        y_t = tf.math.multiply(y_true, y_pred) + tf.math.multiply(1-y_true, 1-y_pred)
+        ce = -tf.math.log(y_t)
+
+        weight = tf.math.pow(tf.math.subtract(1., y_t), gamma)
+        fl = tf.math.multiply(tf.math.multiply(weight, ce), alpha_t)
+
+        fl = tf.math.reduce_sum(fl, axis=-1)
+
+        loss = tf.math.reduce_mean(fl)
+        return loss
+
+    return loss_func
+
+
+def binary_focal_loss(gamma=2, alpha=0.25):
+    """
+    Binary form of focal loss.
+         Focal loss for binary classification problems
+    
+    focal_loss(p_t) = -alpha_t * (1 - p_t)**gamma * log(p_t)
+        where p = sigmoid(x), p_t = p or 1 - p depending on if the label is 1 or 0, respectively.
+    References:
+        https://arxiv.org/pdf/1708.02002.pdf
+    """
+    alpha = tf.constant(alpha, dtype=tf.float32)
+    gamma = tf.constant(gamma, dtype=tf.float32)
+
+    epsilon = 1.e-7
+
+    def loss_func(y_true, y_pred):
+        """
+        y_true shape need be (None,1)
+        y_pred need be compute after sigmoid
+        """
+        y_true = tf.cast(y_true, tf.float32)
+        alpha_t = y_true*alpha + (tf.ones_like(y_true)-y_true)*(1-alpha)
+    
+        p_t = y_true*y_pred + (tf.ones_like(y_true)-y_true)*(tf.ones_like(y_true)-y_pred) + epsilon
+        focal_loss = -alpha_t * tf.math.pow((tf.ones_like(y_true) - p_t), gamma) * tf.math.log(p_t)
+
+        return tf.math.reduce_mean(focal_loss)
+    return loss_func
+
+
 def weighted_categorical_crossentropy(weights):
     """
     A weighted version of keras.objectives.categorical_crossentropy

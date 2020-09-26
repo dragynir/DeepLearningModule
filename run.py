@@ -15,8 +15,12 @@ segm_augs = T.SegmCompose([
 
 
 
+img_target = tf.image.decode_image(tf.io.read_file('res\cool.jpeg'))
+
+
 
 augs = T.Compose([
+    T.RandomFdaTransfer([img_target], transfer_size=(512, 512), p=1.0)
     # T.RandomJpegQuality(30, 50, p=1.0),
     #T.RandomZoom(target_size=(200, 200), zoom_max=0.3),
     # T.FlipLeftRight(),
@@ -39,16 +43,16 @@ augs = T.Compose([
     # T.RandomBrightness(0.5, p=1.0)
 ])
 
-image = tf.image.decode_jpeg(tf.io.read_file('res\image.jpg'))
+image = tf.image.decode_image(tf.io.read_file('res\image.jpg'))
 
 aug_image = augs(image)
 print(tf.shape(aug_image))
 
-aug2_image, _ = segm_augs(aug_image, aug_image)
+# aug2_image, _ = segm_augs(aug_image, aug_image)
 
 
 fig, ax = plt.subplots(1, 3, figsize=(14, 14))
 ax[0].imshow(image.numpy())
 ax[1].imshow(aug_image.numpy())
-ax[2].imshow(aug2_image.numpy())
+ax[2].imshow(img_target.numpy())
 plt.show()

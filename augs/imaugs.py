@@ -235,8 +235,8 @@ class RandomFdaTransfer(Augs):
     def __init__(self, target_images, transfer_size, l_range=(0.01, 0.05), p=0.5, seed=None):
         super().__init__(only_image=True)
         self.transfer_size = transfer_size
-        self.target_images = target_images
         self.targets_count = len(target_images)
+        self.target_images = tf.stack(target_images)
         self.l_range = l_range
         self.p = p
         self.seed = seed
@@ -247,7 +247,11 @@ class RandomFdaTransfer(Augs):
         src = tf.signal.fftshift(amp_src, axes=[0, 1])
         trg = tf.signal.fftshift(amp_trg, axes=[0, 1])
 
-        h, w, _ = tf.cast(tf.shape(src), tf.float32)
+        shape = tf.cast(tf.shape(src), tf.float32)
+
+        h = shape[0]
+        w = shape[1]
+
         b = tf.math.floor(tf.math.reduce_min((h, w)) * L)
 
         # compute image center
@@ -269,7 +273,6 @@ class RandomFdaTransfer(Augs):
 
         w = tf.cast(w, tf.int32)
         h = tf.cast(h, tf.int32)
-
 
         trg_slice = tf.slice(trg,
                 [start_h, start_w, 0], [len_h, len_w, -1])
@@ -294,6 +297,9 @@ class RandomFdaTransfer(Augs):
     @staticmethod
     def transfer_domain(src_image, trg_image, L):
 
+        src_image = tf.cast(src_image, tf.complex64)
+        trg_image = tf.cast(trg_image, tf.complex64)
+
         src_fft = tf.signal.fft3d(src_image)
         trg_fft = tf.signal.fft3d(trg_image)
 
@@ -304,6 +310,7 @@ class RandomFdaTransfer(Augs):
                                       tf.complex64) * tf.complex([0.0], [1.0]))
 
         return tf.math.real(tf.signal.ifft3d(src_fft_mutated))
+
 
     def __call__(self, image):
         if self.perform:
@@ -321,6 +328,10 @@ class RandomFdaTransfer(Augs):
                     maxval=self.l_range[1])
 
             image = RandomFdaTransfer.transfer_domain(image, trg_image, L)
+
+            image = tf.clip_by_value(image, clip_value_min=0.0, clip_value_max=255.0)
+
+            image = tf.cast(image, tf.uint8)
 
         return image
 
