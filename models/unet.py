@@ -7,7 +7,7 @@ import os
 
 os.environ["SM_FRAMEWORK"] = 'tf.keras'
 
-from blocks import decoder_conv_bn_prelu
+from .blocks import decoder_conv_bn_prelu
 
 
 
