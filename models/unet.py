@@ -4,10 +4,12 @@ from tensorflow.keras.layers import Dropout
 import tensorflow as tf
 import os
 
+
+os.environ["SM_FRAMEWORK"] = 'tf.keras'
+
 from blocks import decoder_conv_bn_prelu
 
 
-os.environ["SM_FRAMEWORK"] = 'tf.keras'
 
 def build_effnetb0_unet(
         input_shape,
