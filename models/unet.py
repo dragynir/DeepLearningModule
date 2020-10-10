@@ -33,7 +33,7 @@ def build_effnetb0_unet(
     resize_width, resize_height = input_shape[:2]
     decode_steps = len(decoder_filters)
 
-    for i in range():
+    for i in range(len(skips)):
         if i < len(skips):
             skip = skips[i]
         else:
